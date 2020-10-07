@@ -152,6 +152,8 @@ static int xfrm_policy_flag_parse(__u8 *flags, int *argcp, char ***argvp)
 				*flags |= XFRM_POLICY_LOCALOK;
 			else if (strcmp(*argv, "icmp") == 0)
 				*flags |= XFRM_POLICY_ICMP;
+			else if (strcmp(*argv, "pcpu") == 0)
+				*flags |= XFRM_POLICY_CPU_ACQUIRE;
 			else {
 				PREV_ARG(); /* back track */
 				break;
@@ -267,6 +269,8 @@ static int xfrm_policy_modify(int cmd, unsigned int flags, int argc, char **argv
 	} ctx = {};
 	bool is_if_id_set = false;
 	__u32 if_id = 0;
+	bool is_cpu_set = false;
+	__u32 cpu = 0;
 
 	while (argc > 0) {
 		if (strcmp(*argv, "dir") == 0) {
@@ -340,6 +344,11 @@ static int xfrm_policy_modify(int cmd, unsigned int flags, int argc, char **argv
 			if (get_u32(&if_id, *argv, 0))
 				invarg("IF_ID value is invalid", *argv);
 			is_if_id_set = true;
+		} else if (strcmp(*argv, "cpu") == 0) {
+			NEXT_ARG();
+			if (get_u32(&cpu, *argv, 0))
+				invarg("CPU value is invalid", *argv);
+			is_cpu_set = true;
 		} else {
 			if (selp)
 				duparg("unknown", *argv);
@@ -384,6 +393,9 @@ static int xfrm_policy_modify(int cmd, unsigned int flags, int argc, char **argv
 
 	if (is_if_id_set)
 		addattr32(&req.n, sizeof(req.buf), XFRMA_IF_ID, if_id);
+
+	if (is_cpu_set)
+		addattr32(&req.n, sizeof(req.buf), XFRMA_SA_CPU, cpu);
 
 	if (rtnl_open_byproto(&rth, 0, NETLINK_XFRM) < 0)
 		exit(1);
