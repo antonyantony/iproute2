@@ -309,6 +309,8 @@ static int xfrm_state_modify(int cmd, unsigned int flags, int argc, char **argv)
 	bool is_if_id_set = false;
 	__u32 if_id = 0;
 	__u32 tfcpad = 0;
+	bool is_pcpu_set = false;
+	__u32 pcpu = UINT32_MAX;
 
 	while (argc > 0) {
 		if (strcmp(*argv, "mode") == 0) {
@@ -458,6 +460,11 @@ static int xfrm_state_modify(int cmd, unsigned int flags, int argc, char **argv)
 		} else if (strcmp(*argv, "dir") == 0) {
 			NEXT_ARG();
 			xfrm_dir_parse(&dir, &argc, &argv);
+		} else if (strcmp(*argv, "cpu") == 0) {
+			NEXT_ARG();
+			if (get_u32(&pcpu, *argv, 0))
+				invarg("value after \"cpu\" is invalid", *argv);
+			is_pcpu_set = true;
 		} else {
 			/* try to assume ALGO */
 			int type = xfrm_algotype_getbyname(*argv);
@@ -647,6 +654,8 @@ static int xfrm_state_modify(int cmd, unsigned int flags, int argc, char **argv)
 
 	if (tfcpad)
 		addattr32(&req.n, sizeof(req.buf), XFRMA_TFCPAD, tfcpad);
+	if (is_pcpu_set)
+		addattr32(&req.n, sizeof(req.buf), XFRMA_SA_PCPU, pcpu);
 
 	if (xfrm_xfrmproto_is_ipsec(req.xsinfo.id.proto)) {
 		switch (req.xsinfo.mode) {

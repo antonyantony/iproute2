@@ -919,6 +919,14 @@ void xfrm_xfrma_print(struct rtattr *tb[], __u16 family, FILE *fp,
 			fprintf(fp, "other (%d)", dir);
 		fprintf(fp, "%s", _SL_);
 	}
+	if (tb[XFRMA_SA_PCPU]) {
+		__u32 cpu_id = rta_getattr_u32(tb[XFRMA_SA_PCPU]);
+
+		if (prefix)
+			fputs(prefix, fp);
+		fprintf(fp, "cpu %#x", cpu_id);
+		fprintf(fp, "%s", _SL_);
+	}
 }
 
 static int xfrm_selector_iszero(struct xfrm_selector *s)
@@ -1088,6 +1096,7 @@ void xfrm_policy_info_print(struct xfrm_userpolicy_info *xpinfo,
 		fprintf(fp, "flag ");
 		XFRM_FLAG_PRINT(fp, flags, XFRM_POLICY_LOCALOK, "localok");
 		XFRM_FLAG_PRINT(fp, flags, XFRM_POLICY_ICMP, "icmp");
+		XFRM_FLAG_PRINT(fp, flags, XFRM_POLICY_CPU_ACQUIRE, "pcpu");
 		if (flags)
 			fprintf(fp, "%x", flags);
 	}
