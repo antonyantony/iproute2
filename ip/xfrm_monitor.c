@@ -277,6 +277,52 @@ static int xfrm_mapping_print(struct nlmsghdr *n, void *arg)
 	return 0;
 }
 
+static int xfrm_migrate_print(struct nlmsghdr *n, void *arg)
+{
+	struct xfrm_userpolicy_id *xpid = xpid = NLMSG_DATA(n);
+	struct rtattr *tb[XFRMA_MAX+1];
+	struct rtattr *rta;
+	FILE *fp = (FILE *)arg;
+	int len  =  n->nlmsg_len - NLMSG_SPACE(sizeof(*xpid));
+
+	if (len < 0) {
+                fprintf(stderr, "BUG: wrong nlmsg len %d\n", len);
+                return -1;
+        }
+	rta = XFRMPID_RTA(xpid);
+	parse_rtattr(tb, XFRMA_MAX, rta, len);
+
+	fprintf(fp, "Migrated ");
+
+	xfrm_selector_print(&xpid->sel, preferred_family, fp, NULL);
+
+	fprintf(fp, "dir ");
+	switch (xpid->dir) {
+        case XFRM_POLICY_IN:
+                fprintf(fp, "in");
+                break;
+        case XFRM_POLICY_OUT:
+                fprintf(fp, "out");
+                break;
+        case XFRM_POLICY_FWD:
+                fprintf(fp, "fwd");
+                break;
+        default:
+                fprintf(fp, "%u", xpid->dir);
+                break;
+        }
+	if (tb[XFRMA_OFFLOAD_DEV])
+		if (xfrm_offload_print(tb, "  ", fp))
+			return -1;
+	if (tb[XFRMA_ENCAP])
+		xfrm_encap_print(tb, xpid->sel.family, "  ", fp);
+
+	if (oneline)
+		fprintf(fp, "\n");
+	fflush(fp);
+
+	return 0;
+}
 static int xfrm_accept_msg(struct rtnl_ctrl_data *ctrl,
 			   struct nlmsghdr *n, void *arg)
 {
@@ -322,6 +368,9 @@ static int xfrm_accept_msg(struct rtnl_ctrl_data *ctrl,
 		return 0;
 	case XFRM_MSG_MAPPING:
 		xfrm_mapping_print(n, arg);
+		return 0;
+	case XFRM_MSG_MIGRATE:
+		xfrm_migrate_print(n, arg) ;
 		return 0;
 	default:
 		break;
