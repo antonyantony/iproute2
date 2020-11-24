@@ -712,6 +712,44 @@ bool xfrm_offload_print(struct rtattr *tb[], const char *prefix, FILE *fp)
 	return false;
 }
 
+void xfrm_encap_print(struct rtattr *tb[], __u16 family, const char *prefix, FILE *fp)
+{
+	struct xfrm_encap_tmpl *e;
+
+	if (prefix)
+		fputs(prefix, fp);
+	fprintf(fp, "encap ");
+
+	if (RTA_PAYLOAD(tb[XFRMA_ENCAP]) < sizeof(*e)) {
+		fprintf(fp, "(ERROR truncated)");
+		fprintf(fp, "%s", _SL_);
+		return;
+	}
+	e = RTA_DATA(tb[XFRMA_ENCAP]);
+
+	fprintf(fp, "type ");
+	switch (e->encap_type) {
+	case UDP_ENCAP_ESPINUDP_NON_IKE:
+		fprintf(fp, "espinudp-nonike ");
+		break;
+	case UDP_ENCAP_ESPINUDP:
+		fprintf(fp, "espinudp ");
+		break;
+	case TCP_ENCAP_ESPINTCP:
+		fprintf(fp, "espintcp ");
+		break;
+	default:
+		fprintf(fp, "%u ", e->encap_type);
+		break;
+	}
+	fprintf(fp, "sport %u ", ntohs(e->encap_sport));
+	fprintf(fp, "dport %u ", ntohs(e->encap_dport));
+
+	fprintf(fp, "addr %s",
+		rt_addr_n2a(family, sizeof(e->encap_oa), &e->encap_oa));
+	fprintf(fp, "%s", _SL_);
+}
+
 void xfrm_xfrma_print(struct rtattr *tb[], __u16 family,
 		      FILE *fp, const char *prefix, bool nokeys)
 {
@@ -766,42 +804,8 @@ void xfrm_xfrma_print(struct rtattr *tb[], __u16 family,
 				fp, prefix, nokeys);
 	}
 
-	if (tb[XFRMA_ENCAP]) {
-		struct xfrm_encap_tmpl *e;
-
-		if (prefix)
-			fputs(prefix, fp);
-		fprintf(fp, "encap ");
-
-		if (RTA_PAYLOAD(tb[XFRMA_ENCAP]) < sizeof(*e)) {
-			fprintf(fp, "(ERROR truncated)");
-			fprintf(fp, "%s", _SL_);
-			return;
-		}
-		e = RTA_DATA(tb[XFRMA_ENCAP]);
-
-		fprintf(fp, "type ");
-		switch (e->encap_type) {
-		case UDP_ENCAP_ESPINUDP_NON_IKE:
-			fprintf(fp, "espinudp-nonike ");
-			break;
-		case UDP_ENCAP_ESPINUDP:
-			fprintf(fp, "espinudp ");
-			break;
-		case TCP_ENCAP_ESPINTCP:
-			fprintf(fp, "espintcp ");
-			break;
-		default:
-			fprintf(fp, "%u ", e->encap_type);
-			break;
-		}
-		fprintf(fp, "sport %u ", ntohs(e->encap_sport));
-		fprintf(fp, "dport %u ", ntohs(e->encap_dport));
-
-		fprintf(fp, "addr %s",
-			rt_addr_n2a(family, sizeof(e->encap_oa), &e->encap_oa));
-		fprintf(fp, "%s", _SL_);
-	}
+	if (tb[XFRMA_ENCAP])
+		xfrm_encap_print(tb, family, prefix, fp);
 
 	if (tb[XFRMA_TMPL]) {
 		struct rtattr *rta = tb[XFRMA_TMPL];

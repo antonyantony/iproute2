@@ -143,4 +143,6 @@ int xfrm_lifetime_cfg_parse(struct xfrm_lifetime_cfg *lft,
 int xfrm_sctx_parse(char *ctxstr, char *context,
 		    struct xfrm_user_sec_ctx *sctx);
 bool xfrm_offload_print(struct rtattr *tb[], const char *prefix, FILE *fp);
+void xfrm_encap_print(struct rtattr *tb[], __u16 family, const char *prefix,
+		      FILE *fp);
 #endif
