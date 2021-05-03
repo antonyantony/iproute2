@@ -64,6 +64,7 @@ static void usage(void)
 		"	[ index INDEX ] [ ptype PTYPE ] [ action ACTION ] [ priority PRIORITY ]\n"
 		"	[ flag FLAG-LIST ]\n"
 		"Usage: ip xfrm policy flush [ ptype PTYPE ]\n"
+		"Usage: ip xfrm policy default { get | set } dir DIR [ action ACTION ]\n"
 		"Usage: ip xfrm policy count\n"
 		"Usage: ip xfrm policy set [ hthresh4 LBITS RBITS ] [ hthresh6 LBITS RBITS ]\n"
 		"SELECTOR := [ src ADDR[/PLEN] ] [ dst ADDR[/PLEN] ] [ dev DEV ] [ UPSPEC ]\n"
@@ -1171,6 +1172,93 @@ static int xfrm_policy_flush(int argc, char **argv)
 	return 0;
 }
 
+static int xfrm_policy_default(int argc, char **argv)
+{
+	struct rtnl_handle rth;
+	struct {
+		struct nlmsghdr	n;
+		struct xfrm_userpolicy_default defpol;
+	} req = {
+		.n.nlmsg_len = NLMSG_LENGTH(sizeof(req.defpol)),
+		.n.nlmsg_flags = NLM_F_REQUEST,
+		.n.nlmsg_type = XFRM_MSG_GETDEFAULT,
+		.defpol.dirmask = XFRM_POLICY_IN,
+		.defpol.action = XFRM_POLICY_BLOCK,
+	};
+	int set_value = 0;
+	struct nlmsghdr *answer = NULL;
+	int rc = 0;
+
+	if (argc <= 0)
+		missarg("set or get");
+
+	if (matches(*argv, "set") == 0) {
+		set_value = 1;
+		req.n.nlmsg_type = XFRM_MSG_SETDEFAULT;
+	} else if (matches(*argv, "get") == 0) {
+		set_value = 0;
+		req.n.nlmsg_type = XFRM_MSG_GETDEFAULT;
+	} else {
+		invarg("action", *argv);
+	}
+	argc--;
+	argv++;
+
+	while (argc > 0) {
+		if (strcmp(*argv, "dir") == 0) {
+			NEXT_ARG();
+			if (strcmp(*argv, "in") == 0)
+				req.defpol.dirmask = XFRM_POLICY_IN;
+			else if (strcmp(*argv, "out") == 0)
+				req.defpol.dirmask = XFRM_POLICY_OUT;
+			else if (strcmp(*argv, "fwd") == 0)
+				req.defpol.dirmask = XFRM_POLICY_FWD;
+			else
+				invarg("DIR value is invalid\n", *argv);
+		} else if (strcmp(*argv, "action") == 0) {
+			NEXT_ARG();
+			if (strcmp(*argv, "allow") == 0)
+				req.defpol.action = XFRM_POLICY_ALLOW;
+			else if (strcmp(*argv, "block") == 0)
+				req.defpol.action = XFRM_POLICY_BLOCK;
+			else
+				invarg("ACTION value is invalid\n", *argv);
+		} else
+			invarg("unknown", *argv);
+		argc--; argv++;
+	}
+
+	if (rtnl_open_byproto(&rth, 0, NETLINK_XFRM) < 0)
+		exit(1);
+
+	if (rtnl_talk(&rth, &req.n, (set_value ? NULL : &answer)) < 0)
+		exit(2);
+
+	if (!set_value) {
+		size_t len = answer->nlmsg_len;
+
+		if (answer->nlmsg_type == XFRM_MSG_GETDEFAULT)  {
+			struct xfrm_userpolicy_default *defpol;
+
+			defpol = NLMSG_DATA(answer);
+			if (len >= 0) {
+				fprintf(stdout, "Default policy: %s\n",
+					((defpol->action == XFRM_POLICY_ALLOW) ?
+						 "allow" : "block"));
+			} else {
+				fprintf(stderr, "BUG: wrong nlmsg len %zu\n",
+					len);
+				rc = -1;
+			}
+		}
+	}
+
+	free(answer);
+	rtnl_close(&rth);
+
+	return rc;
+}
+
 int do_xfrm_policy(int argc, char **argv)
 {
 	if (argc < 1)
@@ -1193,6 +1281,8 @@ int do_xfrm_policy(int argc, char **argv)
 		return xfrm_policy_get(argc-1, argv+1);
 	if (matches(*argv, "flush") == 0)
 		return xfrm_policy_flush(argc-1, argv+1);
+	if (matches(*argv, "default") == 0)
+		return xfrm_policy_default(argc-1, argv+1);
 	if (matches(*argv, "count") == 0)
 		return xfrm_spd_getinfo(argc, argv);
 	if (matches(*argv, "set") == 0)
