@@ -59,7 +59,7 @@ static void usage(void)
 		"        [ mark MARK [ mask MASK ] ] [ reqid REQID ] [ seq SEQ ]\n"
 		"        [ replay-window SIZE ] [ replay-seq SEQ ] [ replay-oseq SEQ ]\n"
 		"        [ replay-seq-hi SEQ ] [ replay-oseq-hi SEQ ]\n"
-		"        [ flag FLAG-LIST ] [ sel SELECTOR ] [ LIMIT-LIST ] [ encap ENCAP ]\n"
+		"        [ flag FLAG-LIST ] [ sel SELECTOR ] [ LIMIT-LIST ] [ CUR-LIST ] [ encap ENCAP ]\n"
 		"        [ coa ADDR[/PLEN] ] [ ctx CTX ] [ extra-flag EXTRA-FLAG-LIST ]\n"
 		"        [ offload [dev DEV] dir DIR ]\n"
 		"        [ output-mark OUTPUT-MARK [ mask MASK ] ]\n"
@@ -110,8 +110,10 @@ static void usage(void)
 		"                  { icmp | ipv6-icmp | mobility-header } [ type NUMBER ] [ code NUMBER ] |\n"
 		"                  gre [ key { DOTTED-QUAD | NUMBER } ] | PROTO }\n"
 		"LIMIT-LIST := [ LIMIT-LIST ] limit LIMIT\n"
+		"CUR-LIST := [ CUR-LIST ] cur CUR\n"
 		"LIMIT := { time-soft | time-hard | time-use-soft | time-use-hard } SECONDS |\n"
 		"         { byte-soft | byte-hard } SIZE | { packet-soft | packet-hard } COUNT\n"
+		"CUR := { bytes } COUNT\n"
 		"ENCAP := { espinudp | espinudp-nonike | espintcp } SPORT DPORT OADDR\n"
 		"DIR := in | out\n");
 
@@ -379,6 +381,10 @@ static int xfrm_state_modify(int cmd, unsigned int flags, int argc, char **argv)
 		} else if (strcmp(*argv, "limit") == 0) {
 			NEXT_ARG();
 			xfrm_lifetime_cfg_parse(&req.xsinfo.lft, &argc, &argv);
+		} else if (strcmp(*argv, "cur") == 0) {
+			NEXT_ARG();
+			xfrm_lifetime_cur_cfg_parse(&req.xsinfo.curlft, &req.xsinfo.seq,
+			&argc, &argv);
 		} else if (strcmp(*argv, "encap") == 0) {
 			struct xfrm_encap_tmpl encap;
 			inet_prefix oa;
