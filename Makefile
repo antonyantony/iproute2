@@ -58,7 +58,7 @@ HOSTCC ?= $(CC)
 DEFINES += -D_GNU_SOURCE
 # Turn on transparent support for LFS
 DEFINES += -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -D_LARGEFILE64_SOURCE
-CCOPTS = -O2 -pipe
+CCOPTS = -ggdb3 -g -pipe
 WFLAGS := -Wall -Wstrict-prototypes  -Wmissing-prototypes
 WFLAGS += -Wmissing-declarations -Wold-style-definition -Wformat=2
 
@@ -69,6 +69,7 @@ SUBDIRS=lib ip tc bridge misc netem genl tipc devlink rdma dcb man vdpa
 
 LIBNETLINK=../lib/libutil.a ../lib/libnetlink.a
 LDLIBS += $(LIBNETLINK)
+LDFLAGS += -lm
 
 all: config.mk
 	@set -e; \
