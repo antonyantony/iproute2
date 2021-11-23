@@ -213,11 +213,6 @@ enum {
 	XFRM_MSG_GETSPDINFO,
 #define XFRM_MSG_GETSPDINFO XFRM_MSG_GETSPDINFO
 
-	XFRM_MSG_SETDEFAULT,
-#define XFRM_MSG_SETDEFAULT XFRM_MSG_SETDEFAULT
-	XFRM_MSG_GETDEFAULT,
-#define XFRM_MSG_GETDEFAULT XFRM_MSG_GETDEFAULT
-
 	XFRM_MSG_MAPPING,
 #define XFRM_MSG_MAPPING XFRM_MSG_MAPPING
 	__XFRM_MSG_MAX
@@ -542,10 +537,5 @@ enum xfrm_nlgroups {
 	__XFRMNLGRP_MAX
 };
 #define XFRMNLGRP_MAX	(__XFRMNLGRP_MAX - 1)
-
-struct xfrm_userpolicy_default {
-	__u8				dirmask;
-	__u8				action;
-};
 
 #endif /* _LINUX_XFRM_H */
