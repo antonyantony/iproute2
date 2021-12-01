@@ -384,7 +384,7 @@ static int xfrm_state_modify(int cmd, unsigned int flags, int argc, char **argv)
 			xfrm_lifetime_cfg_parse(&req.xsinfo.lft, &argc, &argv);
 		} else if (strcmp(*argv, "map-interval") == 0) {
 			NEXT_ARG();
-			if (get_u32(mapi, *argv, 0))
+			if (get_u32(&mapi, *argv, 0))
 				invarg("value after \"map-interval\" is invalid",
 				       *argv);
 		} else if (strcmp(*argv, "cur") == 0) {

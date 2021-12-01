@@ -915,6 +915,7 @@ void xfrm_xfrma_print(struct rtattr *tb[], __u16 family,
 		fprintf(fp, "tfcpad %u", tfcpad);
 		fprintf(fp, "%s", _SL_);
 	}
+
 }
 
 static int xfrm_selector_iszero(struct xfrm_selector *s)
@@ -1002,6 +1003,14 @@ void xfrm_state_info_print(struct xfrm_usersa_info *xsinfo,
 	if (show_stats > 0) {
 		xfrm_lifetime_print(&xsinfo->lft, &xsinfo->curlft, fp, buf);
 		xfrm_stats_print(&xsinfo->stats, fp, buf);
+		if (tb[XFRMA_MTIMER_THRESH]) {
+			__u32 mapi = rta_getattr_u32(tb[XFRMA_MTIMER_THRESH]);
+
+			if (prefix)
+				fputs(prefix, fp);
+			fprintf(fp, "mapping-interval %u", mapi);
+			fprintf(fp, "%s", _SL_);
+		}
 	}
 
 	if (tb[XFRMA_SEC_CTX])
