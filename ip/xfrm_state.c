@@ -317,6 +317,7 @@ static int xfrm_state_modify(int cmd, unsigned int flags, int argc, char **argv)
 	bool is_offload = false;
 	__u32 replay_window = 0;
 	__u32 seq = 0, oseq = 0, seq_hi = 0, oseq_hi = 0;
+	__u32 mapi = 0;
 	char *idp = NULL;
 	char *aeadop = NULL;
 	char *ealgop = NULL;
@@ -381,10 +382,14 @@ static int xfrm_state_modify(int cmd, unsigned int flags, int argc, char **argv)
 		} else if (strcmp(*argv, "limit") == 0) {
 			NEXT_ARG();
 			xfrm_lifetime_cfg_parse(&req.xsinfo.lft, &argc, &argv);
+		} else if (strcmp(*argv, "map-interval") == 0) {
+			NEXT_ARG();
+			if (get_u32(mapi, *argv, 0))
+				invarg("value after \"map-interval\" is invalid",
+				       *argv);
 		} else if (strcmp(*argv, "cur") == 0) {
 			NEXT_ARG();
-			xfrm_lifetime_cur_cfg_parse(&req.xsinfo.curlft, &req.xsinfo.seq,
-			&argc, &argv);
+			xfrm_lifetime_cur_cfg_parse(&req.xsinfo.curlft, &argc, &argv);
 		} else if (strcmp(*argv, "encap") == 0) {
 			struct xfrm_encap_tmpl encap;
 			inet_prefix oa;

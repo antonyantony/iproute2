@@ -1485,42 +1485,55 @@ int xfrm_selector_parse(struct xfrm_selector *sel, int *argcp, char ***argvp)
 	return 0;
 }
 
-int xfrm_lifetime_cur_cfg_parse(struct xfrm_lifetime_cur *cur, __u32 *seq,
-			    int *argcp, char ***argvp)
+int xfrm_lifetime_cur_cfg_parse(struct xfrm_lifetime_cur *cur,
+				int *argcp, char ***argvp)
 {
 	int argc = *argcp;
 	char **argv = *argvp;
 	int ret;
 
-	if (strcmp(*argv, "add-time") == 0) {
+	while (1) {
+		if (strcmp(*argv, "add-time") == 0) {
+			NEXT_ARG();
+			ret = get_u64(&cur->add_time, *argv, 0);
+			if (ret) {
+				invarg("value after \"add-time\" is invalid", *argv);
+				break;
+			}
+		} else if (strcmp(*argv, "use-time") == 0) {
+			NEXT_ARG();
+			ret = get_u64(&cur->use_time, *argv, 0);
+			if (ret) {
+				invarg("value after \"use-time\" is invalid", *argv);
+				break;
+			}
+
+		} else if (strcmp(*argv, "bytes") == 0) {
+			NEXT_ARG();
+			ret = get_u64(&cur->bytes, *argv, 0);
+			printf ("AA set bytes to %llu \n", cur->bytes);
+			if (ret) {
+				invarg("value after \"bytes\" is invalid", *argv);
+				break;
+			}
+
+		} else if (strcmp(*argv, "packets") == 0) {
+			NEXT_ARG();
+			ret = get_u64(&cur->packets, *argv, 0);
+			if (ret) {
+				invarg("value after \"packets\" is invalid", *argv);
+				break;
+			}
+		} else {
+			PREV_ARG(); /* back track */
+			break;
+		}
+
+		if (!NEXT_ARG_OK())
+                        break;
+
 		NEXT_ARG();
-		ret = get_u64(&cur->add_time, *argv, 0);
-		if (ret)
-			invarg("value after \"add-time\" is invalid", *argv);
-	} else if (strcmp(*argv, "use-time") == 0) {
-		NEXT_ARG();
-		ret = get_u64(&cur->use_time, *argv, 0);
-		if (ret)
-			invarg("value after \"use-time\" is invalid", *argv);
-	} else if (strcmp(*argv, "bytes") == 0) {
-		NEXT_ARG();
-		ret = get_u64(&cur->bytes, *argv, 0);
-		printf ("AA set bytes to %llu \n", cur->bytes);
-		if (ret)
-			invarg("value after \"bytes\" is invalid", *argv);
-	} else if (strcmp(*argv, "packets") == 0) {
-		NEXT_ARG();
-		ret = get_u64(&cur->packets, *argv, 0);
-		if (ret)
-			invarg("value after \"packets\" is invalid", *argv);
-	} else if (strcmp(*argv, "seq") == 0) {
-		NEXT_ARG();
-		ret = get_u32(seq, *argv, 0);
-		printf ("AA set seq to %lu \n", *seq);
-		if (ret)
-			invarg("value after \"bytes\" is invalid", *argv);
-	} else
-		invarg("CUR value is invalid", *argv);
+	}
 
 	*argcp = argc;
 	*argvp = argv;
