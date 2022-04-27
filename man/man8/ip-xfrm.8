@@ -163,7 +163,7 @@ ip-xfrm \- transform configuration
 
 .ti -8
 .IR MODE " := "
-.BR transport " | " tunnel " | " beet " | " ro " | " in_trigger
+.BR transport " | " tunnel " | " iptfs " | " beet " | " ro " | " in_trigger
 
 .ti -8
 .IR FLAG-LIST " := [ " FLAG-LIST " ] " FLAG
@@ -415,7 +415,7 @@ ip-xfrm \- transform configuration
 
 .ti -8
 .IR MODE " := "
-.BR transport " | " tunnel " | " beet " | " ro " | " in_trigger
+.BR transport " | " tunnel " | " iptfs " | " beet " | " ro " | " in_trigger
 
 .ti -8
 .IR LEVEL " :="
@@ -541,7 +541,9 @@ Compression algorithms include
 specifies a mode of operation for the transform protocol. IPsec and IP Payload
 Compression modes are
 .BR transport ", " tunnel ","
-and (for IPsec ESP only) Bound End-to-End Tunnel
+and (for IPsec ESP only) IP-TFS Tunnel
+.RB "(" iptfs ")"
+and Bound End-to-End Tunnel
 .RB "(" beet ")."
 Mobile IPv6 modes are route optimization
 .RB "(" ro ")"
@@ -699,7 +701,9 @@ specifies a transform protocol:
 specifies a mode of operation for the transform protocol. IPsec and IP Payload
 Compression modes are
 .BR transport ", " tunnel ","
-and (for IPsec ESP only) Bound End-to-End Tunnel
+and (for IPsec ESP only) IP-TFS Tunnel
+.RB "(" iptfs ")"
+and Bound End-to-End Tunnel
 .RB "(" beet ")."
 Mobile IPv6 modes are route optimization
 .RB "(" ro ")"

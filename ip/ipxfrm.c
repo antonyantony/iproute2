@@ -294,6 +294,9 @@ static void xfrm_id_info_print(xfrm_address_t *saddr, struct xfrm_id *id,
 	case XFRM_MODE_TUNNEL:
 		fprintf(fp, "tunnel");
 		break;
+	case XFRM_MODE_IPTFS:
+		fprintf(fp, "iptfs");
+		break;
 	case XFRM_MODE_ROUTEOPTIMIZATION:
 		fprintf(fp, "ro");
 		break;
@@ -1186,6 +1189,8 @@ int xfrm_mode_parse(__u8 *mode, int *argcp, char ***argvp)
 		*mode = XFRM_MODE_TRANSPORT;
 	else if (matches(*argv, "tunnel") == 0)
 		*mode = XFRM_MODE_TUNNEL;
+	else if (matches(*argv, "iptfs") == 0)
+		*mode = XFRM_MODE_IPTFS;
 	else if (matches(*argv, "ro") == 0)
 		*mode = XFRM_MODE_ROUTEOPTIMIZATION;
 	else if (matches(*argv, "in_trigger") == 0)

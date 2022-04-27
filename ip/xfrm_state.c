@@ -84,7 +84,7 @@ static void usage(void)
 		"        %s", strxf_algotype(XFRMA_ALG_COMP));
 	fprintf(stderr,
 		" ALGO-NAME\n"
-		"MODE := transport | tunnel | beet | ro | in_trigger\n"
+		"MODE := transport | tunnel | iptfs | beet | ro | in_trigger\n"
 		"FLAG-LIST := [ FLAG-LIST ] FLAG\n"
 		"FLAG := noecn | decap-dscp | nopmtudisc | wildrecv | icmp | af-unspec | align4 | esn\n"
 		"EXTRA-FLAG-LIST := [ EXTRA-FLAG-LIST ] EXTRA-FLAG\n"
@@ -658,6 +658,7 @@ static int xfrm_state_modify(int cmd, unsigned int flags, int argc, char **argv)
 		case XFRM_MODE_TUNNEL:
 			break;
 		case XFRM_MODE_BEET:
+		case XFRM_MODE_IPTFS:
 			if (req.xsinfo.id.proto == IPPROTO_ESP)
 				break;
 			/* fallthrough */
