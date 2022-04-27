@@ -77,7 +77,7 @@ static void usage(void)
 		strxf_xfrmproto(IPPROTO_ROUTING),
 		strxf_xfrmproto(IPPROTO_DSTOPTS));
 	fprintf(stderr,
-		"MODE := transport | tunnel | beet | ro | in_trigger\n"
+		"MODE := transport | tunnel | iptfs | beet | ro | in_trigger\n"
 		"LEVEL := required | use\n");
 
 	exit(-1);
