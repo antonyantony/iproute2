@@ -907,6 +907,26 @@ void xfrm_xfrma_print(struct rtattr *tb[], __u16 family, FILE *fp,
 		fprintf(fp, "tfcpad %u", tfcpad);
 		fprintf(fp, "%s", _SL_);
 	}
+	if (tb[XFRMA_IPTFS_PKT_SIZE] || tb[XFRMA_IPTFS_MAX_QSIZE] ||
+	    tb[XFRMA_IPTFS_DONT_FRAG] || tb[XFRMA_IPTFS_DROP_TIME] ||
+	    tb[XFRMA_IPTFS_REORD_WIN] || tb[XFRMA_IPTFS_IN_DELAY]) {
+		if (prefix)
+			fputs(prefix, fp);
+		fprintf(fp, "iptfs-opts");
+
+#define _(type, name, bits)                                                    \
+	if (tb[(type)])                                                        \
+	fprintf(fp, " %s %u", name, rta_getattr_u##bits(tb[(type)]))
+		_(XFRMA_IPTFS_PKT_SIZE, "pkt-size", 32);
+		_(XFRMA_IPTFS_MAX_QSIZE, "max-queue-size", 32);
+		_(XFRMA_IPTFS_DROP_TIME, "drop-time", 32);
+		_(XFRMA_IPTFS_REORD_WIN, "reorder-window", 16);
+		_(XFRMA_IPTFS_IN_DELAY, "init-delay", 32);
+		if (tb[XFRMA_IPTFS_DONT_FRAG])
+			fprintf(fp, " dont-frag");
+		fprintf(fp, "%s", _SL_);
+#undef _
+	}
 }
 
 static int xfrm_selector_iszero(struct xfrm_selector *s)
