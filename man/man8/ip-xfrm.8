@@ -78,6 +78,8 @@ ip-xfrm \- transform configuration
 .IR LENGTH " ]"
 .RB "[ " pcpu-num
 .IR CPUNUM " ]"
+.RB "[ " iptfs-opts
+.IR IPTFS-OPTS " ]"
 
 .ti -8
 .B "ip xfrm state allocspi"
@@ -239,6 +241,26 @@ ip-xfrm \- transform configuration
 .ti -8
 .IR EXTRA-FLAG " := "
 .BR dont-encap-dscp " | " oseq-may-wrap
+
+.ti -8
+.IR IPTFS-OPTS " := [ " IPTFS-OPTS " ] " IPTFS-DIR-IN-OPT " | " IPTFS-DIR-OUT-OPT
+
+.ti -8
+.IR IPTFS-DIR-IN-OPT " :="
+.BI drop-time
+.IR USECS " | "
+.B reorder-window
+.I COUNT
+
+.ti -8
+.IR IPTFS-DIR-OUT-OPT " :="
+.BR dont-frag " | "
+.B init-delay
+.IR USECS " | "
+.B max-queue-size
+.IR SIZE " | "
+.B pkt-size
+.I SIZE
 
 .ti -8
 .BR "ip xfrm policy" " { " add " | " update " }"
@@ -591,6 +613,44 @@ Other protocols can be selected by name or number
 sets limits in seconds, bytes, or numbers of packets.
 
 .TP
+.I IPTFS-OPTS
+options to configure the iptfs tunnel. These options are describe below:
+.RS
+.TP
+.BI drop-time " USECS"
+the amount of time in microseconds to wait for out-of-order packets.
+This is an SA input direction option.
+.TP
+.BI reorder-window " COUNT"
+the number of packets that can arrive out of order without drops.
+This is an SA input direction option.
+.TP
+.B dont-frag
+if specified then inner packets are not fragmented across multiple outer
+IP-TFS tunnel packets.
+This is an SA output direction option.
+.TP
+.BI init-delay " USECS"
+the amount of time in microseconds to wait for subsequent packets
+to aggregate together. This delay is only taken when no packets are
+pending to be sent on the tunnel.
+This is an SA output direction option.
+.TP
+.BI max-queue-size " SIZE"
+the maximum number of bytes allowed to be queued for sending
+on the tunnel. When the queue becomes full packets destined for the
+tunnel will be dropped.
+This is an SA output direction option.
+.TP
+.BI pkt-size " SIZE"
+If non-zero specifies the layer-3 maximum outer packet size.
+If zero (the defualt) then the tunnel destination MTU will be
+used. This value is also used to determine the fixed-packet-size
+when constant-send-rate mode is enabled.
+This is an SA output direction option.
+.RE
+
+.TP
 .I ENCAP
 encapsulates packets with protocol
 .BR espinudp ", " espinudp-nonike ", or " espintcp ","
@@ -787,3 +847,5 @@ Manpage revised by David Ward <david.ward@ll.mit.edu>
 Manpage revised by Christophe Gouault <christophe.gouault@6wind.com>
 .br
 Manpage revised by Nicolas Dichtel <nicolas.dichtel@6wind.com>
+.br
+Manpage revised by Christian Hopps <chopps@labn.net>
