@@ -99,7 +99,7 @@ static void usage(void)
 		"         { byte-soft | byte-hard } SIZE | { packet-soft | packet-hard } COUNT\n"
 		"IPTFS-OPTS := [ IPTFS-OPTS ] IPTFS-OPT\n"
 		"IPTFS-OPT := init-delay USECS | max-queue-size SIZE | drop-time USECS |\n"
-		"             reorder-window SIZE | pkt-size SIZE | dont-frag\n"
+		"             reorder-window COUNT | pkt-size SIZE | dont-frag\n"
 		"ENCAP := { espinudp | espinudp-nonike | espintcp } SPORT DPORT OADDR\n"
 		"DIR := in | out\n");
 
