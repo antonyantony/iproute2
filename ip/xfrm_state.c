@@ -47,7 +47,7 @@ static void usage(void)
 		"        [ coa ADDR[/PLEN] ] [ ctx CTX ] [ extra-flag EXTRA-FLAG-LIST ]\n"
 		"        [ offload [ crypto | packet ] dev DEV dir DIR ]\n"
 		"        [ output-mark OUTPUT-MARK [ mask MASK ] ]\n"
-		"        [ if_id IF_ID ] [ tfcpad LENGTH ]\n"
+		"        [ if_id IF_ID ] [ tfcpad LENGTH ] [dir DIR]\n"
 		"        [ iptfs-opts IPTFS-OPTS ]\n"
 		"Usage: ip xfrm state allocspi ID [ mode MODE ] [ mark MARK [ mask MASK ] ]\n"
 		"        [ reqid REQID ] [ seq SEQ ] [ min SPI max SPI ]\n"
@@ -338,7 +338,9 @@ static int xfrm_state_modify(int cmd, unsigned int flags, int argc, char **argv)
 	struct xfrm_replay_state_esn replay_esn = {};
 	struct xfrm_user_offload xuo = {};
 	unsigned int ifindex = 0;
-	__u8 dir = 0;
+	__u8 dir = 0; /* only used with xuo XFRMA_OFFLOAD */
+	__u8 sa_dir = 0; /* state direction. Should match the above when offload */
+
 	bool is_offload = false, is_packet_offload = false;
 	__u32 replay_window = 0;
 	__u32 seq = 0, oseq = 0, seq_hi = 0, oseq_hi = 0;
@@ -510,6 +512,14 @@ static int xfrm_state_modify(int cmd, unsigned int flags, int argc, char **argv)
 			NEXT_ARG();
 			if (get_u32(&tfcpad, *argv, 0))
 				invarg("value after \"tfcpad\" is invalid", *argv);
+		} else if (strcmp(*argv, "dir") == 0) {
+			NEXT_ARG();
+			if (strcmp(*argv, "in") == 0)
+				sa_dir = XFRM_SA_DIR_IN;
+			else if (strcmp(*argv, "out") == 0)
+				sa_dir = XFRM_SA_DIR_OUT;
+			else
+				invarg("value after \"dir\" is invalid", *argv);
 		} else if (strcmp(*argv, "iptfs-opts") == 0) {
 			NEXT_ARG();
 			xfrm_iptfs_opts_parse(&req.n, sizeof(req.buf), &argc,
@@ -812,6 +822,9 @@ static int xfrm_state_modify(int cmd, unsigned int flags, int argc, char **argv)
 
 	if (output_mark.m)
 		addattr32(&req.n, sizeof(req.buf), XFRMA_SET_MARK_MASK, output_mark.m);
+
+	if (sa_dir)
+		addattr8(&req.n, sizeof(req.buf), XFRMA_SA_DIR, sa_dir);
 
 	if (rtnl_open_byproto(&rth, 0, NETLINK_XFRM) < 0)
 		exit(1);
