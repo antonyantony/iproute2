@@ -257,7 +257,8 @@ const char *strxf_ptype(__u8 ptype)
 
 static void xfrm_id_info_print(xfrm_address_t *saddr, struct xfrm_id *id,
 			__u8 mode, __u32 reqid, __u16 family, int force_spi,
-			FILE *fp, const char *prefix, const char *title)
+			__u8 sa_dir, FILE *fp, const char *prefix,
+			const char *title)
 {
 	if (title)
 		fputs(title, fp);
@@ -307,6 +308,15 @@ static void xfrm_id_info_print(xfrm_address_t *saddr, struct xfrm_id *id,
 		fprintf(fp, "%u", mode);
 		break;
 	}
+
+	if (sa_dir) {
+		fprintf(fp, " dir ");
+		if (sa_dir == XFRM_SA_DIR_IN)
+			fprintf(fp, "in");
+		else
+			fprintf(fp, "out");
+	}
+
 	fprintf(fp, "%s", _SL_);
 }
 
@@ -322,7 +332,7 @@ static const char *strxf_limit(__u64 limit)
 	return str;
 }
 
-static void xfrm_stats_print(struct xfrm_stats *s, FILE *fp,
+static void xfrm_stats_print(struct xfrm_stats *s, __u8 sa_dir, FILE *fp,
 			     const char *prefix)
 {
 	if (prefix)
@@ -331,8 +341,14 @@ static void xfrm_stats_print(struct xfrm_stats *s, FILE *fp,
 
 	if (prefix)
 		fputs(prefix, fp);
-	fprintf(fp, "  replay-window %u replay %u failed %u%s",
-		s->replay_window, s->replay, s->integrity_failed, _SL_);
+
+	if (sa_dir == XFRM_SA_DIR_OUT) {
+		/* would the fail occur on OUT??? */
+		fprintf(fp, " failed %u%s", s->integrity_failed, _SL_);
+	} else {
+		fprintf(fp, "  replay-window %u replay %u failed %u%s",
+			s->replay_window, s->replay, s->integrity_failed, _SL_);
+	}
 }
 
 static const char *strxf_time(__u64 time)
@@ -584,7 +600,7 @@ static void xfrm_tmpl_print(struct xfrm_user_tmpl *tmpls, int len,
 			fputs(prefix, fp);
 
 		xfrm_id_info_print(&tmpl->saddr, &tmpl->id, tmpl->mode,
-				   tmpl->reqid, tmpl->family, 0, fp, prefix, "tmpl ");
+				   tmpl->reqid, tmpl->family, 0, 0, fp, prefix, "tmpl ");
 
 		if (show_stats > 0 || tmpl->optional) {
 			if (prefix)
@@ -675,6 +691,8 @@ done:
 void xfrm_xfrma_print(struct rtattr *tb[], __u16 family, FILE *fp,
 		      const char *prefix, bool nokeys, bool dir)
 {
+	__u8 sa_dir =  tb[XFRMA_SA_DIR] ? rta_getattr_u8(tb[XFRMA_SA_DIR]) : 0;
+
 	if (tb[XFRMA_MARK]) {
 		struct rtattr *rta = tb[XFRMA_MARK];
 		struct xfrm_mark *m = RTA_DATA(rta);
@@ -813,7 +831,6 @@ void xfrm_xfrma_print(struct rtattr *tb[], __u16 family, FILE *fp,
 
 		if (prefix)
 			fputs(prefix, fp);
-		fprintf(fp, "anti-replay context: ");
 
 		if (RTA_PAYLOAD(tb[XFRMA_REPLAY_VAL]) < sizeof(*replay)) {
 			fprintf(fp, "(ERROR truncated)");
@@ -822,8 +839,11 @@ void xfrm_xfrma_print(struct rtattr *tb[], __u16 family, FILE *fp,
 		}
 
 		replay = RTA_DATA(tb[XFRMA_REPLAY_VAL]);
-		fprintf(fp, "seq 0x%x, oseq 0x%x, bitmap 0x%08x",
-			replay->seq, replay->oseq, replay->bitmap);
+		if (sa_dir == XFRM_SA_DIR_OUT)
+			fprintf(fp, "oseq 0x%x", replay->oseq);
+		else
+			fprintf(fp, "seq 0x%x, oseq 0x%x, bitmap 0x%08x",
+				replay->seq, replay->oseq, replay->bitmap);
 		fprintf(fp, "%s", _SL_);
 	}
 
@@ -833,36 +853,55 @@ void xfrm_xfrma_print(struct rtattr *tb[], __u16 family, FILE *fp,
 
 		if (prefix)
 			fputs(prefix, fp);
-		fprintf(fp, "anti-replay esn context:");
+		if (!sa_dir) {
+			fprintf(fp, "anti-replay esn context:");
+			fprintf(fp, "%s", _SL_);
+		}
 
 		if (RTA_PAYLOAD(tb[XFRMA_REPLAY_ESN_VAL]) < sizeof(*replay)) {
-			fprintf(fp, "(ERROR truncated)");
+			fprintf(fp, "(ERROR esn truncated)");
 			fprintf(fp, "%s", _SL_);
 			return;
 		}
-		fprintf(fp, "%s", _SL_);
 
 		replay = RTA_DATA(tb[XFRMA_REPLAY_ESN_VAL]);
-		if (prefix)
+
+		if (!sa_dir && prefix)
 			fputs(prefix, fp);
-		fprintf(fp, " seq-hi 0x%x, seq 0x%x, oseq-hi 0x%0x, oseq 0x%0x",
-			replay->seq_hi, replay->seq, replay->oseq_hi,
-			replay->oseq);
+		if (!sa_dir)
+			fprintf(fp, " ");
+		if (!sa_dir || sa_dir == XFRM_SA_DIR_IN)
+			fprintf(fp, "seq-hi 0x%x, seq 0x%x",
+				replay->seq_hi, replay->seq);
+		if (!sa_dir)
+			fprintf(fp, " ");
+		if (!sa_dir || sa_dir == XFRM_SA_DIR_OUT)
+			fprintf(fp, "oseq-hi 0x%0x, oseq 0x%0x",
+				replay->oseq_hi, replay->oseq);
 		fprintf(fp, "%s", _SL_);
-		if (prefix)
-			fputs(prefix, fp);
-		fprintf(fp, " replay_window %u, bitmap-length %u",
-			replay->replay_window, replay->bmp_len);
-		for (i = replay->bmp_len, j = 0; i; i--) {
-			if (j++ % 8 == 0) {
-				fprintf(fp, "%s", _SL_);
-				if (prefix)
-					fputs(prefix, fp);
+
+		if (sa_dir != XFRM_SA_DIR_OUT) {
+			if (prefix)
+				fputs(prefix, fp);
+			if (!sa_dir)
 				fprintf(fp, " ");
+			if (sa_dir)
+				fprintf(fp, "replay-window");
+			else
+				fprintf(fp, "replay_window"); /* for historic reasons */
+			fprintf(fp, " %u, bitmap-length %u", replay->replay_window,
+				replay->bmp_len);
+			for (i = replay->bmp_len, j = 0; i; i--) {
+				if (j++ % 8 == 0) {
+					fprintf(fp, "%s", _SL_);
+					if (prefix)
+						fputs(prefix, fp);
+					fprintf(fp, " ");
+				}
+				fprintf(fp, "%08x ", replay->bmp[i - 1]);
 			}
-			fprintf(fp, "%08x ", replay->bmp[i - 1]);
+			fprintf(fp, "%s", _SL_);
 		}
-		fprintf(fp, "%s", _SL_);
 	}
 	if (tb[XFRMA_OFFLOAD_DEV]) {
 		struct xfrm_user_offload *xuo;
@@ -904,18 +943,6 @@ void xfrm_xfrma_print(struct rtattr *tb[], __u16 family, FILE *fp,
 		fprintf(fp, "tfcpad %u", tfcpad);
 		fprintf(fp, "%s", _SL_);
 	}
-	if (tb[XFRMA_SA_DIR]) {
-		__u8 dir = rta_getattr_u8(tb[XFRMA_SA_DIR]);
-
-		fprintf(fp, "\tdir ");
-		if (dir == XFRM_SA_DIR_IN)
-			fprintf(fp, "in");
-		else if (dir == XFRM_SA_DIR_OUT)
-			fprintf(fp, "out");
-		else
-			fprintf(fp, " %d", dir);
-		fprintf(fp, "%s", _SL_);
-	}
 }
 
 static int xfrm_selector_iszero(struct xfrm_selector *s)
@@ -944,22 +971,30 @@ void xfrm_state_info_print(struct xfrm_usersa_info *xsinfo,
 {
 	char buf[STRBUF_SIZE] = {};
 	int force_spi = xfrm_xfrmproto_is_ipsec(xsinfo->id.proto);
+	__u8 sa_dir =  tb[XFRMA_SA_DIR] ? rta_getattr_u8(tb[XFRMA_SA_DIR]) : 0;
+	bool sl = false;
 
 	xfrm_id_info_print(&xsinfo->saddr, &xsinfo->id, xsinfo->mode,
-			   xsinfo->reqid, xsinfo->family, force_spi, fp,
+			   xsinfo->reqid, xsinfo->family, force_spi, sa_dir, fp,
 			   prefix, title);
 
 	if (prefix)
 		strlcat(buf, prefix, sizeof(buf));
+
 	strlcat(buf, "\t", sizeof(buf));
 
-	fputs(buf, fp);
-	fprintf(fp, "replay-window %u ", xsinfo->replay_window);
-	if (show_stats > 0)
-		fprintf(fp, "seq 0x%08u ", xsinfo->seq);
+	if (sa_dir == 0 || (sa_dir == XFRM_SA_DIR_IN && tb[XFRMA_REPLAY_VAL])) {
+		fputs(buf, fp);
+		fprintf(fp, "replay-window %u ", xsinfo->replay_window);
+		if (show_stats > 0)
+			fprintf(fp, "seq 0x%08u ", xsinfo->seq);
+		sl = true;
+	}
+
 	if (show_stats > 0 || xsinfo->flags) {
 		__u8 flags = xsinfo->flags;
 
+		fputs(buf, fp);
 		fprintf(fp, "flag ");
 		XFRM_FLAG_PRINT(fp, flags, XFRM_STATE_NOECN, "noecn");
 		XFRM_FLAG_PRINT(fp, flags, XFRM_STATE_DECAP_DSCP, "decap-dscp");
@@ -969,8 +1004,10 @@ void xfrm_state_info_print(struct xfrm_usersa_info *xsinfo,
 		XFRM_FLAG_PRINT(fp, flags, XFRM_STATE_AF_UNSPEC, "af-unspec");
 		XFRM_FLAG_PRINT(fp, flags, XFRM_STATE_ALIGN4, "align4");
 		XFRM_FLAG_PRINT(fp, flags, XFRM_STATE_ESN, "esn");
-		if (flags)
+		if (flags) {
 			fprintf(fp, "%x", flags);
+		}
+		sl = true;
 	}
 	if (show_stats > 0 && tb[XFRMA_SA_EXTRA_FLAGS]) {
 		__u32 extra_flags = rta_getattr_u32(tb[XFRMA_SA_EXTRA_FLAGS]);
@@ -982,12 +1019,17 @@ void xfrm_state_info_print(struct xfrm_usersa_info *xsinfo,
 		XFRM_FLAG_PRINT(fp, extra_flags,
 				XFRM_SA_XFLAG_OSEQ_MAY_WRAP,
 				"oseq-may-wrap");
-		if (extra_flags)
+		if (extra_flags) {
 			fprintf(fp, "%x", extra_flags);
+			sl = true;
+		}
 	}
-	if (show_stats > 0)
+	if (show_stats > 0) {
 		fprintf(fp, " (0x%s)", strxf_mask8(xsinfo->flags));
-	fprintf(fp, "%s", _SL_);
+		sl = true;
+	}
+	if (sl)
+		fprintf(fp, "%s", _SL_);
 
 	xfrm_xfrma_print(tb, xsinfo->family, fp, buf, nokeys, true);
 
@@ -1002,7 +1044,7 @@ void xfrm_state_info_print(struct xfrm_usersa_info *xsinfo,
 
 	if (show_stats > 0) {
 		xfrm_lifetime_print(&xsinfo->lft, &xsinfo->curlft, fp, buf);
-		xfrm_stats_print(&xsinfo->stats, fp, buf);
+		xfrm_stats_print(&xsinfo->stats, sa_dir, fp, buf);
 	}
 
 	if (tb[XFRMA_SEC_CTX])
