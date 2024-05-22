@@ -1006,7 +1006,7 @@ void xfrm_state_info_print(struct xfrm_usersa_info *xsinfo,
 	if (show_stats > 0 && tb[XFRMA_SA_EXTRA_FLAGS]) {
 		__u32 extra_flags = rta_getattr_u32(tb[XFRMA_SA_EXTRA_FLAGS]);
 
-		fprintf(fp, "extra_flag ");
+		fprintf(fp, " extra-flag ");
 		XFRM_FLAG_PRINT(fp, extra_flags,
 				XFRM_SA_XFLAG_DONT_ENCAP_DSCP,
 				"dont-encap-dscp");
