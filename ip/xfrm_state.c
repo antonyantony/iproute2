@@ -49,6 +49,7 @@ static void usage(void)
 		"        [ output-mark OUTPUT-MARK [ mask MASK ] ]\n"
 		"        [ if_id IF_ID ] [ tfcpad LENGTH ]\n"
 		"        [ cpu CPU_ID ]\n"
+		"        [ iptfs-opts IPTFS-OPTS ]\n"
 		"Usage: ip xfrm state allocspi ID [ mode MODE ] [ mark MARK [ mask MASK ] ]\n"
 		"        [ reqid REQID ] [ dir DIR ] [ seq SEQ ] [ min SPI max SPI ]\n"
 		"Usage: ip xfrm state { delete | get } ID [ mark MARK [ mask MASK ] ]\n"
@@ -97,6 +98,10 @@ static void usage(void)
 		"LIMIT-LIST := [ LIMIT-LIST ] limit LIMIT\n"
 		"LIMIT := { time-soft | time-hard | time-use-soft | time-use-hard } SECONDS |\n"
 		"         { byte-soft | byte-hard } SIZE | { packet-soft | packet-hard } COUNT\n"
+		"IPTFS-OPTS := [ IPTFS-OPTS ] IPTFS-DIR-IN-OPT | IPTFS-DIR-OUT-OPT\n"
+		"IPTFS-DIR-IN-OPT := drop-time USECS | reorder-window COUNT\n"
+		"IPTFS-DIR-OUT-OPT := dont-frag | init-delay USECS | max-queue-size SIZE |\n"
+		"                     pkt-size SIZE\n"
 		"ENCAP := { espinudp | espinudp-nonike | espintcp } SPORT DPORT OADDR\n"
 		"DIR := in | out\n"
 		"CPU_ID : CPU id start at 0. 0xffffff no CPU\n");
@@ -267,6 +272,50 @@ static void xfrm_dir_parse(__u8 *dir, int *argcp, char ***argvp)
 
 	*argcp = argc;
 	*argvp = argv;
+}
+
+static int xfrm_iptfs_opts_parse(struct nlmsghdr *n, int buflen, int *argcp,
+				 char ***argvp)
+{
+	int argc = *argcp;
+	char **argv = *argvp;
+
+#define _(name, type, bits)                                                    \
+	else if (strcmp(*argv, name) == 0) do                                  \
+	{                                                                      \
+		__u##bits val;                                                 \
+		NEXT_ARG();                                                    \
+		if (get_u##bits(&val, *argv, 0))                               \
+			invarg("value after \"" name "\" is invalid", *argv);  \
+		addattr##bits(n, buflen, type, val);                           \
+	}                                                                      \
+	while (0)
+
+	while (1) {
+		if (0)
+			;
+		_("drop-time", XFRMA_IPTFS_DROP_TIME, 32);
+		_("reorder-window", XFRMA_IPTFS_REORDER_WINDOW, 16);
+		_("init-delay", XFRMA_IPTFS_INIT_DELAY, 32);
+		_("max-queue-size", XFRMA_IPTFS_MAX_QSIZE, 32);
+		_("pkt-size", XFRMA_IPTFS_PKT_SIZE, 32);
+		else if (strcmp(*argv, "dont-frag") == 0)
+			addattr(n, buflen, XFRMA_IPTFS_DONT_FRAG);
+		else
+		{
+			PREV_ARG(); /* back track */
+			break;
+		}
+		if (!NEXT_ARG_OK())
+			break;
+		NEXT_ARG();
+	}
+#undef _
+
+	*argcp = argc;
+	*argvp = argv;
+
+	return 0;
 }
 
 static int xfrm_state_modify(int cmd, unsigned int flags, int argc, char **argv)
@@ -467,6 +516,10 @@ static int xfrm_state_modify(int cmd, unsigned int flags, int argc, char **argv)
 			if (get_u32(&pcpu, *argv, 0))
 				invarg("value after \"cpu\" is invalid", *argv);
 			is_pcpu_set = true;
+		} else if (strcmp(*argv, "iptfs-opts") == 0) {
+			NEXT_ARG();
+			xfrm_iptfs_opts_parse(&req.n, sizeof(req.buf), &argc,
+					      &argv);
 		} else {
 			/* try to assume ALGO */
 			int type = xfrm_algotype_getbyname(*argv);

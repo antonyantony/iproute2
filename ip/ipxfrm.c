@@ -676,8 +676,10 @@ done:
 }
 
 void xfrm_xfrma_print(struct rtattr *tb[], __u16 family, FILE *fp,
-		      const char *prefix, bool nokeys, bool dir)
+		      const char *prefix, bool nokeys, bool off_dir)
 {
+	__u8 sa_dir = tb[XFRMA_SA_DIR] ? rta_getattr_u8(tb[XFRMA_SA_DIR]) : 0;
+
 	if (tb[XFRMA_MARK]) {
 		struct rtattr *rta = tb[XFRMA_MARK];
 		struct xfrm_mark *m = RTA_DATA(rta);
@@ -884,7 +886,7 @@ void xfrm_xfrma_print(struct rtattr *tb[], __u16 family, FILE *fp,
 			RTA_DATA(tb[XFRMA_OFFLOAD_DEV]);
 		fprintf(fp, "dev %s ",
 			ll_index_to_name(xuo->ifindex));
-		if (dir)
+		if (off_dir)
 			fprintf(fp, "dir %s ",
 			(xuo->flags & XFRM_OFFLOAD_INBOUND) ? "in" : "out");
 		fprintf(fp, "mode %s",
@@ -907,16 +909,34 @@ void xfrm_xfrma_print(struct rtattr *tb[], __u16 family, FILE *fp,
 		fprintf(fp, "tfcpad %u", tfcpad);
 		fprintf(fp, "%s", _SL_);
 	}
-	if (tb[XFRMA_SA_DIR]) {
-		__u8 dir = rta_getattr_u8(tb[XFRMA_SA_DIR]);
-
+	if (sa_dir) {
 		fprintf(fp, "\tdir ");
-		if (dir == XFRM_SA_DIR_IN)
+		if (sa_dir == XFRM_SA_DIR_IN)
 			fprintf(fp, "in");
-		else if (dir == XFRM_SA_DIR_OUT)
+		else if (sa_dir == XFRM_SA_DIR_OUT)
 			fprintf(fp, "out");
 		else
-			fprintf(fp, "other (%d)", dir);
+			fprintf(fp, "other (%d)", sa_dir);
+		fprintf(fp, "%s", _SL_);
+	}
+	if (tb[XFRMA_IPTFS_PKT_SIZE] || tb[XFRMA_IPTFS_MAX_QSIZE] ||
+	    tb[XFRMA_IPTFS_DONT_FRAG] || tb[XFRMA_IPTFS_DROP_TIME] ||
+	    tb[XFRMA_IPTFS_REORDER_WINDOW] || tb[XFRMA_IPTFS_INIT_DELAY]) {
+		if (prefix)
+			fputs(prefix, fp);
+		fprintf(fp, "iptfs-opts");
+
+#define _(inout, type, name, bits)				\
+	if (sa_dir == XFRM_SA_DIR_ ## inout && tb[(type)])		\
+		fprintf(fp, " %s %u", name, rta_getattr_u##bits(tb[(type)]))
+		_(IN, XFRMA_IPTFS_DROP_TIME, "drop-time", 32);
+		_(IN, XFRMA_IPTFS_REORDER_WINDOW, "reorder-window", 16);
+		if (sa_dir == XFRM_SA_DIR_OUT && tb[XFRMA_IPTFS_DONT_FRAG])
+			fprintf(fp, " dont-frag");
+		_(OUT, XFRMA_IPTFS_INIT_DELAY, "init-delay", 32);
+		_(OUT, XFRMA_IPTFS_MAX_QSIZE, "max-queue-size", 32);
+		_(OUT, XFRMA_IPTFS_PKT_SIZE, "pkt-size", 32);
+#undef _
 		fprintf(fp, "%s", _SL_);
 	}
 	if (tb[XFRMA_SA_PCPU]) {
