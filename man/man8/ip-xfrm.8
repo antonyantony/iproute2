@@ -372,7 +372,7 @@ ip-xfrm \- transform configuration
 
 .ti -8
 .IR FLAG " :="
-.BR localok " | " icmp
+.BR localok " | " icmp " | " pcpu
 
 .ti -8
 .IR LIMIT-LIST " := [ " LIMIT-LIST " ]"
@@ -607,6 +607,11 @@ xfrm interface identifier used to in both xfrm policies and states
 .TP
 .I DEV
 Network interface name used to offload policies and states
+
+.TP
+.I CPU_ID
+CPU id, start from zero. It is used by xfrm output. On input state CPU id may
+ be used for external RSS flow steering. 0xffffffff is CPU id unset.
 
 .sp
 .PP

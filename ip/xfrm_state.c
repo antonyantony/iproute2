@@ -48,6 +48,7 @@ static void usage(void)
 		"        [ offload [ crypto | packet ] dev DEV dir DIR ]\n"
 		"        [ output-mark OUTPUT-MARK [ mask MASK ] ]\n"
 		"        [ if_id IF_ID ] [ tfcpad LENGTH ]\n"
+		"        [ cpu CPU_ID ]\n"
 		"Usage: ip xfrm state allocspi ID [ mode MODE ] [ mark MARK [ mask MASK ] ]\n"
 		"        [ reqid REQID ] [ dir DIR ] [ seq SEQ ] [ min SPI max SPI ]\n"
 		"Usage: ip xfrm state { delete | get } ID [ mark MARK [ mask MASK ] ]\n"
@@ -97,7 +98,8 @@ static void usage(void)
 		"LIMIT := { time-soft | time-hard | time-use-soft | time-use-hard } SECONDS |\n"
 		"         { byte-soft | byte-hard } SIZE | { packet-soft | packet-hard } COUNT\n"
 		"ENCAP := { espinudp | espinudp-nonike | espintcp } SPORT DPORT OADDR\n"
-		"DIR := in | out\n");
+		"DIR := in | out\n"
+		"CPU_ID : CPU id start at 0. 0xffffff no CPU\n");
 
 	exit(-1);
 }
