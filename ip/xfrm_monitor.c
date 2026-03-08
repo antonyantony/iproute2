@@ -261,6 +261,160 @@ static int xfrm_mapping_print(struct nlmsghdr *n, void *arg)
 	return 0;
 }
 
+static void xfrm_migrate_encap_print(struct rtattr *tb[], __u16 family,
+				     const char *prefix, FILE *fp)
+{
+	struct xfrm_encap_tmpl *e = RTA_DATA(tb[XFRMA_ENCAP]);
+	static const xfrm_address_t zero_addr;
+
+	if (prefix)
+		fputs(prefix, fp);
+	if (e->encap_type == 0) {
+		fprintf(fp, "encap none ");
+	} else {
+		fprintf(fp, "encap espinudp sport %u dport %u ",
+			ntohs(e->encap_sport), ntohs(e->encap_dport));
+		if (memcmp(&e->encap_oa, &zero_addr, sizeof(zero_addr)))
+			fprintf(fp, "addr %s ",
+				rt_addr_n2a(family, sizeof(e->encap_oa),
+					    &e->encap_oa));
+	}
+	if (prefix)
+		fprintf(fp, "%s", _SL_);
+}
+
+static void xfrm_migrate_offload_print(struct rtattr *tb[],
+				       const char *prefix, FILE *fp)
+{
+	struct xfrm_user_offload *xuo = RTA_DATA(tb[XFRMA_OFFLOAD_DEV]);
+
+	if (prefix)
+		fputs(prefix, fp);
+	if (xuo->ifindex == 0)
+		fprintf(fp, "offload none ");
+	else
+		fprintf(fp, "offload dev %s dir %s ",
+			ll_index_to_name(xuo->ifindex),
+			(xuo->flags & XFRM_OFFLOAD_INBOUND) ? "in" : "out");
+	if (prefix)
+		fprintf(fp, "%s", _SL_);
+}
+
+static void xfrm_migrate_mode_print(__u8 mode, FILE *fp)
+{
+	switch (mode) {
+	case XFRM_MODE_TRANSPORT:
+		fprintf(fp, "transport");
+		break;
+	case XFRM_MODE_TUNNEL:
+		fprintf(fp, "tunnel");
+		break;
+	case XFRM_MODE_BEET:
+		fprintf(fp, "beet");
+		break;
+	case XFRM_MODE_IPTFS:
+		fprintf(fp, "iptfs");
+		break;
+	default:
+		fprintf(fp, "%u", mode);
+		break;
+	}
+}
+
+static void xfrm_migrate_one_print(const struct xfrm_user_migrate *um,
+				   FILE *fp)
+{
+	fprintf(fp, "    proto %s mode ", strxf_proto(um->proto));
+	xfrm_migrate_mode_print(um->mode, fp);
+	fprintf(fp, " reqid %u\n", um->reqid);
+
+	fprintf(fp, "    old src %s",
+		rt_addr_n2a(um->old_family, sizeof(um->old_saddr),
+			    &um->old_saddr));
+	fprintf(fp, " dst %s\n",
+		rt_addr_n2a(um->old_family, sizeof(um->old_daddr),
+			    &um->old_daddr));
+
+	fprintf(fp, "    new src %s",
+		rt_addr_n2a(um->new_family, sizeof(um->new_saddr),
+			    &um->new_saddr));
+	fprintf(fp, " dst %s\n",
+		rt_addr_n2a(um->new_family, sizeof(um->new_daddr),
+			    &um->new_daddr));
+	fprintf(fp, "\n");
+}
+
+static int xfrm_migrate_print(struct nlmsghdr *n, void *arg)
+{
+	struct xfrm_userpolicy_id *xpid = NLMSG_DATA(n);
+	struct rtattr *tb[XFRMA_MAX+1];
+	struct rtattr *rta_m;
+	struct rtattr *rta;
+	FILE *fp = (FILE *)arg;
+	int len = n->nlmsg_len - NLMSG_SPACE(sizeof(*xpid));
+	int rem;
+
+	if (len < 0) {
+		fprintf(stderr, "BUG: wrong nlmsg len %d\n", len);
+		return -1;
+	}
+	rta = XFRMPID_RTA(xpid);
+	parse_rtattr(tb, XFRMA_MAX, rta, len);
+
+	fprintf(fp, "Migrated dir ");
+	switch (xpid->dir) {
+	case XFRM_POLICY_IN:
+		fprintf(fp, "in");
+		break;
+	case XFRM_POLICY_OUT:
+		fprintf(fp, "out");
+		break;
+	case XFRM_POLICY_FWD:
+		fprintf(fp, "fwd");
+		break;
+	default:
+		fprintf(fp, "%u", xpid->dir);
+		break;
+	}
+	if (tb[XFRMA_POLICY_TYPE]) {
+		struct xfrm_userpolicy_type *upt = RTA_DATA(tb[XFRMA_POLICY_TYPE]);
+
+		fprintf(fp, " type %s", strxf_ptype(upt->type));
+	}
+	fprintf(fp, " ");
+	xfrm_selector_print(&xpid->sel, preferred_family, fp, NULL);
+
+	if (tb[XFRMA_ENCAP])
+		xfrm_migrate_encap_print(tb, xpid->sel.family, NULL, fp);
+	if (tb[XFRMA_OFFLOAD_DEV])
+		xfrm_migrate_offload_print(tb, NULL, fp);
+	if (tb[XFRMA_ENCAP] || tb[XFRMA_OFFLOAD_DEV])
+		fprintf(fp, "\n");
+
+	if (tb[XFRMA_KMADDRESS]) {
+		struct xfrm_user_kmaddress *k = RTA_DATA(tb[XFRMA_KMADDRESS]);
+
+		fprintf(fp, "  kmaddress local %s",
+			rt_addr_n2a(k->family, sizeof(k->local), &k->local));
+		fprintf(fp, " remote %s\n",
+			rt_addr_n2a(k->family, sizeof(k->remote), &k->remote));
+	}
+
+	/* XFRMA_MIGRATE appears once per SA; iterate manually */
+	rem = len;
+	for (rta_m = rta; RTA_OK(rta_m, rem); rta_m = RTA_NEXT(rta_m, rem)) {
+		if (rta_m->rta_type == XFRMA_MIGRATE &&
+		    RTA_PAYLOAD(rta_m) >= sizeof(struct xfrm_user_migrate))
+			xfrm_migrate_one_print(RTA_DATA(rta_m), fp);
+	}
+
+	if (oneline)
+		fprintf(fp, "\n");
+	fflush(fp);
+
+	return 0;
+}
+
 static int xfrm_accept_msg(struct rtnl_ctrl_data *ctrl,
 			   struct nlmsghdr *n, void *arg)
 {
@@ -309,6 +463,9 @@ static int xfrm_accept_msg(struct rtnl_ctrl_data *ctrl,
 		return 0;
 	case XFRM_MSG_GETDEFAULT:
 		xfrm_policy_default_print(n, arg);
+		return 0;
+	case XFRM_MSG_MIGRATE:
+		xfrm_migrate_print(n, arg);
 		return 0;
 	default:
 		break;
