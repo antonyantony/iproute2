@@ -415,6 +415,100 @@ static int xfrm_migrate_print(struct nlmsghdr *n, void *arg)
 	return 0;
 }
 
+static int xfrm_migrate_state_print(struct nlmsghdr *n, void *arg)
+{
+	struct rtattr *rta;
+	FILE *fp = (FILE *)arg;
+	struct rtattr *tb[XFRMA_MAX+1];
+	struct xfrm_user_migrate_state *xums = NLMSG_DATA(n);
+	int len = n->nlmsg_len - NLMSG_SPACE(sizeof(*xums));
+
+	if (len < 0) {
+		fprintf(stderr, "BUG: wrong nlmsg len %d\n", len);
+		return -1;
+	}
+
+	rta = XFRMUMS_RTA(xums);
+	parse_rtattr(tb, XFRMA_MAX, rta, len);
+
+	fprintf(fp, "Migrated state ");
+
+	if (tb[XFRMA_SA_DIR]) {
+		__u8 dir = rta_getattr_u8(tb[XFRMA_SA_DIR]);
+
+		if (dir == XFRM_SA_DIR_IN)
+			fprintf(fp, "dir in ");
+		else if (dir == XFRM_SA_DIR_OUT)
+			fprintf(fp, "dir out ");
+		else
+			fprintf(fp, "dir %u ", dir);
+	}
+
+	fprintf(fp, "proto %s ", strxf_xfrmproto(xums->id.proto));
+	fprintf(fp, "spi 0x%08x ", ntohl(xums->id.spi));
+	fprintf(fp, "dst %s ",
+		rt_addr_n2a(xums->id.family, sizeof(xums->id.daddr),
+			    &xums->id.daddr));
+
+	if (xums->old_mark.v || xums->old_mark.m)
+		fprintf(fp, "mark 0x%x/0x%x ", xums->old_mark.v,
+			xums->old_mark.m);
+
+	fprintf(fp, "\n new-dst %s ",
+		rt_addr_n2a(xums->new_family, sizeof(xums->new_daddr),
+			    &xums->new_daddr));
+	fprintf(fp, "new-src %s ",
+		rt_addr_n2a(xums->new_family, sizeof(xums->new_saddr),
+			    &xums->new_saddr));
+	fprintf(fp, "new-reqid %u", xums->new_reqid);
+
+	if (tb[XFRMA_MARK] || tb[XFRMA_SET_MARK]) {
+		fprintf(fp, "\n ");
+		if (tb[XFRMA_MARK]) {
+			struct xfrm_mark *m = RTA_DATA(tb[XFRMA_MARK]);
+
+			fprintf(fp, "new-mark 0x%x/0x%x ", m->v, m->m);
+		}
+
+		if (tb[XFRMA_SET_MARK]) {
+			__u32 smark = rta_getattr_u32(tb[XFRMA_SET_MARK]);
+			__u32 smask = tb[XFRMA_SET_MARK_MASK] ?
+				rta_getattr_u32(tb[XFRMA_SET_MARK_MASK]) : 0xffffffff;
+
+			fprintf(fp, "set-mark 0x%x/0x%x ", smark, smask);
+		}
+	}
+
+	if (tb[XFRMA_ENCAP]) {
+		fprintf(fp, "\n ");
+		xfrm_migrate_encap_print(tb, xums->new_family, NULL, fp);
+	}
+
+	if (tb[XFRMA_OFFLOAD_DEV]) {
+		fprintf(fp, "\n ");
+		xfrm_migrate_offload_print(tb, NULL, fp);
+	} else if (xums->flags & XFRM_MIGRATE_STATE_NO_OFFLOAD) {
+		fprintf(fp, "\n no-offload ");
+	}
+
+	if (tb[XFRMA_MTIMER_THRESH] || tb[XFRMA_NAT_KEEPALIVE_INTERVAL]) {
+		fprintf(fp, "\n ");
+		if (tb[XFRMA_MTIMER_THRESH])
+			fprintf(fp, "mtimer-thresh %u ",
+				rta_getattr_u32(tb[XFRMA_MTIMER_THRESH]));
+		if (tb[XFRMA_NAT_KEEPALIVE_INTERVAL])
+			fprintf(fp, "nat-keepalive %u ",
+				rta_getattr_u32(tb[XFRMA_NAT_KEEPALIVE_INTERVAL]));
+	}
+
+	fprintf(fp, "%s", _SL_);
+	if (oneline)
+		fprintf(fp, "\n");
+	fflush(fp);
+
+	return 0;
+}
+
 static int xfrm_accept_msg(struct rtnl_ctrl_data *ctrl,
 			   struct nlmsghdr *n, void *arg)
 {
@@ -466,6 +560,9 @@ static int xfrm_accept_msg(struct rtnl_ctrl_data *ctrl,
 		return 0;
 	case XFRM_MSG_MIGRATE:
 		xfrm_migrate_print(n, arg);
+		return 0;
+	case XFRM_MSG_MIGRATE_STATE:
+		xfrm_migrate_state_print(n, arg);
 		return 0;
 	default:
 		break;
