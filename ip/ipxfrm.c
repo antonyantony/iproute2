@@ -889,7 +889,7 @@ void xfrm_xfrma_print(struct rtattr *tb[], __u16 family, FILE *fp,
 			RTA_DATA(tb[XFRMA_OFFLOAD_DEV]);
 		fprintf(fp, "dev %s ",
 			ll_index_to_name(xuo->ifindex));
-		if (dir)
+		if (off_dir)
 			fprintf(fp, "dir %s ",
 			(xuo->flags & XFRM_OFFLOAD_INBOUND) ? "in" : "out");
 		fprintf(fp, "mode %s",
