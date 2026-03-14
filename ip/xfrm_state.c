@@ -57,6 +57,17 @@ static void usage(void)
 		"Usage: ip xfrm state list [ nokeys ] [ ID ] [ mode MODE ] [ reqid REQID ]\n"
 		"        [ flag FLAG-LIST ]\n"
 		"Usage: ip xfrm state flush [ proto XFRM-PROTO ]\n"
+		"Usage: ip xfrm state migrate dst DST proto PROTO spi SPI\n"
+		"        [ mark MARK [ mask MASK ] ]\n"
+		"        new-dst ADDR new-src ADDR new-reqid REQID\n"
+		"        [ new-family { inet | inet6 } ]\n"
+		"        [ new-mark MARK [ mask MASK ] ]\n"
+		"        [ encap { espinudp | espinudp-nonike | espintcp }\n"
+		"            sport PORT dport PORT [ addr OA ] | encap none ]\n"
+		"        [ offload { dev DEV dir { in | out } | none } | no-offload ]\n"
+		"        [ set-mark MARK [ mask MASK ] ]\n"
+		"        [ mtimer-thresh SECONDS ]\n"
+		"        [ nat-keepalive SECONDS ]\n"
 		"Usage: ip xfrm state count\n"
 		"ID := [ src ADDR ] [ dst ADDR ] [ proto XFRM-PROTO ] [ spi SPI ]\n"
 		"XFRM-PROTO := ");
@@ -101,7 +112,7 @@ static void usage(void)
 		"IPTFS-DIR-IN-OPT := drop-time USECS | reorder-window COUNT\n"
 		"IPTFS-DIR-OUT-OPT := dont-frag | init-delay USECS | max-queue-size SIZE |\n"
 		"                     pkt-size SIZE\n"
-		"ENCAP := { espinudp | espinudp-nonike | espintcp } SPORT DPORT OADDR\n"
+		"ENCAP := { espinudp | espinudp-nonike | espintcp } SPORT DPORT [ OADDR ]\n"
 		"DIR := in | out\n");
 
 	exit(-1);
@@ -407,7 +418,7 @@ static int xfrm_state_modify(int cmd, unsigned int flags, int argc, char **argv)
 			NEXT_ARG();
 			xfrm_lifetime_cfg_parse(&req.xsinfo.lft, &argc, &argv);
 		} else if (strcmp(*argv, "encap") == 0) {
-			struct xfrm_encap_tmpl encap;
+			struct xfrm_encap_tmpl encap = {};
 			inet_prefix oa;
 			NEXT_ARG();
 			xfrm_encap_type_parse(&encap.encap_type, &argc, &argv);
@@ -417,9 +428,14 @@ static int xfrm_state_modify(int cmd, unsigned int flags, int argc, char **argv)
 			NEXT_ARG();
 			if (get_be16(&encap.encap_dport, *argv, 0))
 				invarg("DPORT value after \"encap\" is invalid", *argv);
-			NEXT_ARG();
-			get_addr(&oa, *argv, AF_UNSPEC);
-			memcpy(&encap.encap_oa, &oa.data, sizeof(encap.encap_oa));
+			if (NEXT_ARG_OK()) {
+				NEXT_ARG();
+				if (get_addr(&oa, *argv, AF_UNSPEC) == 0)
+					memcpy(&encap.encap_oa, &oa.data,
+					       sizeof(encap.encap_oa));
+				else
+					PREV_ARG();
+			}
 			addattr_l(&req.n, sizeof(req.buf), XFRMA_ENCAP,
 				  (void *)&encap, sizeof(encap));
 		} else if (strcmp(*argv, "coa") == 0) {
@@ -1539,6 +1555,242 @@ static int xfrm_state_flush(int argc, char **argv)
 	return 0;
 }
 
+static int xfrm_state_migrate(int argc, char **argv)
+{
+	struct rtnl_handle rth;
+	struct {
+		struct nlmsghdr			n;
+		struct xfrm_user_migrate_state	xums;
+		char				buf[1024];
+	} req = {
+		.n.nlmsg_len   = NLMSG_LENGTH(sizeof(req.xums)),
+		.n.nlmsg_flags = NLM_F_REQUEST,
+		.n.nlmsg_type  = XFRM_MSG_MIGRATE_STATE,
+	};
+	bool new_dst_set = false;
+	bool new_src_set = false;
+	bool new_reqid_set = false;
+	bool offload_set = false;
+
+	while (argc > 0) {
+		if (strcmp(*argv, "dst") == 0) {
+			inet_prefix dst;
+
+			NEXT_ARG();
+			get_prefix(&dst, *argv, preferred_family);
+			if (dst.family == AF_UNSPEC)
+				invarg("invalid dst address", *argv);
+			req.xums.id.family = dst.family;
+			memcpy(&req.xums.id.daddr, &dst.data,
+			       sizeof(req.xums.id.daddr));
+
+		} else if (strcmp(*argv, "proto") == 0) {
+			int ret;
+
+			NEXT_ARG();
+			ret = xfrm_xfrmproto_getbyname(*argv);
+			if (ret < 0)
+				invarg("invalid PROTO", *argv);
+			req.xums.id.proto = (__u8)ret;
+
+		} else if (strcmp(*argv, "spi") == 0) {
+			NEXT_ARG();
+			if (get_be32(&req.xums.id.spi, *argv, 0))
+				invarg("invalid SPI", *argv);
+
+		} else if (strcmp(*argv, "mark") == 0) {
+			if (xfrm_parse_mark(&req.xums.old_mark, &argc, &argv) < 0)
+				exit(1);
+
+		} else if (strcmp(*argv, "new-dst") == 0) {
+			inet_prefix dst;
+
+			NEXT_ARG();
+			get_prefix(&dst, *argv, preferred_family);
+			if (dst.family == AF_UNSPEC)
+				invarg("invalid new-dst address", *argv);
+			if (!req.xums.new_family)
+				req.xums.new_family = dst.family;
+			memcpy(&req.xums.new_daddr, &dst.data,
+			       sizeof(req.xums.new_daddr));
+			new_dst_set = true;
+
+		} else if (strcmp(*argv, "new-src") == 0) {
+			inet_prefix src;
+
+			NEXT_ARG();
+			get_prefix(&src, *argv, preferred_family);
+			if (src.family == AF_UNSPEC)
+				invarg("invalid new-src address", *argv);
+			if (!req.xums.new_family)
+				req.xums.new_family = src.family;
+			memcpy(&req.xums.new_saddr, &src.data,
+			       sizeof(req.xums.new_saddr));
+			new_src_set = true;
+
+		} else if (strcmp(*argv, "new-family") == 0) {
+			NEXT_ARG();
+			if (strcmp(*argv, "inet") == 0)
+				req.xums.new_family = AF_INET;
+			else if (strcmp(*argv, "inet6") == 0)
+				req.xums.new_family = AF_INET6;
+			else
+				invarg("new-family must be inet or inet6", *argv);
+
+		} else if (strcmp(*argv, "new-reqid") == 0) {
+			NEXT_ARG();
+			if (get_u32(&req.xums.new_reqid, *argv, 0))
+				invarg("invalid new-reqid", *argv);
+			new_reqid_set = true;
+
+		} else if (strcmp(*argv, "new-mark") == 0) {
+			struct xfrm_mark new_mark;
+
+			if (xfrm_parse_mark(&new_mark, &argc, &argv) < 0)
+				exit(1);
+			addattr_l(&req.n, sizeof(req.buf), XFRMA_MARK,
+				  &new_mark, sizeof(new_mark));
+
+		} else if (strcmp(*argv, "encap") == 0) {
+			struct xfrm_encap_tmpl encap = {};
+
+			NEXT_ARG();
+			if (strcmp(*argv, "none") == 0) {
+				/* sentinel: encap_type=0 clears encap on SA */
+				addattr_l(&req.n, sizeof(req.buf), XFRMA_ENCAP,
+					  &encap, sizeof(encap));
+			} else {
+				if (xfrm_encap_type_parse(&encap.encap_type,
+							  &argc, &argv) < 0)
+					exit(1);
+				NEXT_ARG();
+				if (strcmp(*argv, "sport") != 0)
+					missarg("sport");
+				NEXT_ARG();
+				if (get_be16(&encap.encap_sport, *argv, 0))
+					invarg("invalid encap sport", *argv);
+				NEXT_ARG();
+				if (strcmp(*argv, "dport") != 0)
+					missarg("dport");
+				NEXT_ARG();
+				if (get_be16(&encap.encap_dport, *argv, 0))
+					invarg("invalid encap dport", *argv);
+				if (NEXT_ARG_OK()) {
+					NEXT_ARG();
+					if (strcmp(*argv, "addr") == 0) {
+						inet_prefix oa;
+
+						NEXT_ARG();
+						get_addr(&oa, *argv, AF_UNSPEC);
+						memcpy(&encap.encap_oa, &oa.data,
+						       sizeof(encap.encap_oa));
+					} else {
+						PREV_ARG();
+					}
+				}
+				addattr_l(&req.n, sizeof(req.buf), XFRMA_ENCAP,
+					  &encap, sizeof(encap));
+			}
+
+		} else if (strcmp(*argv, "offload") == 0) {
+			struct xfrm_user_offload xuo = {};
+
+			if (req.xums.flags & XFRM_MIGRATE_STATE_NO_OFFLOAD)
+				invarg("offload and no-offload are mutually exclusive", *argv);
+			NEXT_ARG();
+			if (strcmp(*argv, "none") == 0) {
+				/* sentinel: ifindex=0 removes offload */
+				addattr_l(&req.n, sizeof(req.buf),
+					  XFRMA_OFFLOAD_DEV, &xuo, sizeof(xuo));
+			} else {
+				if (strcmp(*argv, "dev") != 0)
+					missarg("dev");
+				NEXT_ARG();
+				xuo.ifindex = ll_name_to_index(*argv);
+				if (xuo.ifindex == 0)
+					invarg("invalid offload dev", *argv);
+				NEXT_ARG();
+				if (strcmp(*argv, "dir") != 0)
+					missarg("dir");
+				NEXT_ARG();
+				if (strcmp(*argv, "in") == 0)
+					xuo.flags |= XFRM_OFFLOAD_INBOUND;
+				else if (strcmp(*argv, "out") != 0)
+					invarg("offload dir must be in or out",
+					       *argv);
+				addattr_l(&req.n, sizeof(req.buf),
+					  XFRMA_OFFLOAD_DEV, &xuo, sizeof(xuo));
+			}
+			offload_set = true;
+
+		} else if (strcmp(*argv, "no-offload") == 0) {
+			if (offload_set)
+				invarg("no-offload and offload are mutually exclusive", *argv);
+			req.xums.flags |= XFRM_MIGRATE_STATE_NO_OFFLOAD;
+
+		} else if (strcmp(*argv, "set-mark") == 0) {
+			struct xfrm_mark sm;
+
+			if (xfrm_parse_mark(&sm, &argc, &argv) < 0)
+				exit(1);
+			addattr32(&req.n, sizeof(req.buf), XFRMA_SET_MARK,
+				  sm.v);
+			addattr32(&req.n, sizeof(req.buf), XFRMA_SET_MARK_MASK,
+				  sm.m);
+
+		} else if (strcmp(*argv, "mtimer-thresh") == 0) {
+			__u32 val;
+
+			NEXT_ARG();
+			if (get_u32(&val, *argv, 0))
+				invarg("invalid mtimer-thresh", *argv);
+			addattr32(&req.n, sizeof(req.buf), XFRMA_MTIMER_THRESH,
+				  val);
+
+		} else if (strcmp(*argv, "nat-keepalive") == 0) {
+			__u32 val;
+
+			NEXT_ARG();
+			if (get_u32(&val, *argv, 0))
+				invarg("invalid nat-keepalive", *argv);
+			addattr32(&req.n, sizeof(req.buf),
+				  XFRMA_NAT_KEEPALIVE_INTERVAL, val);
+
+		} else if (strcmp(*argv, "help") == 0) {
+			usage();
+		} else {
+			invarg("unknown argument", *argv);
+		}
+
+		argc--;
+		argv++;
+	}
+
+	if (!req.xums.id.proto)
+		missarg("proto");
+	if (!req.xums.id.spi)
+		missarg("spi");
+	if (!new_dst_set)
+		missarg("new-dst");
+	if (!new_src_set)
+		missarg("new-src");
+	if (!new_reqid_set)
+		missarg("new-reqid");
+
+	if (!req.xums.new_family)
+		req.xums.new_family = req.xums.id.family;
+
+	if (rtnl_open_byproto(&rth, 0, NETLINK_XFRM) < 0)
+		exit(1);
+
+	if (rtnl_talk(&rth, &req.n, NULL) < 0)
+		exit(2);
+
+	rtnl_close(&rth);
+
+	return 0;
+}
+
 int do_xfrm_state(int argc, char **argv)
 {
 	if (argc < 1)
@@ -1563,9 +1815,10 @@ int do_xfrm_state(int argc, char **argv)
 		return xfrm_state_get_or_delete(argc-1, argv+1, 0);
 	if (matches(*argv, "flush") == 0)
 		return xfrm_state_flush(argc-1, argv+1);
-	if (matches(*argv, "count") == 0) {
+	if (matches(*argv, "count") == 0)
 		return xfrm_sad_getinfo(argc, argv);
-	}
+	if (matches(*argv, "migrate") == 0)
+		return xfrm_state_migrate(argc-1, argv+1);
 	if (matches(*argv, "help") == 0)
 		usage();
 	fprintf(stderr, "Command \"%s\" is unknown, try \"ip xfrm state help\".\n", *argv);
